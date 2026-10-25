@@ -198,6 +198,8 @@ def passo6_descritivo(base):
     anos.to_csv(config.DADOS_PROCESSADOS / "por_ano.csv")
     print("\nPor ano:")
     print(anos.to_string(**pd_opcoes))
+    graficos.graficos_descritivos(base, cen, crises, anos)
+    
 
 
 def main():
