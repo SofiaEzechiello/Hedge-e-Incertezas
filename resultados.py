@@ -206,7 +206,7 @@ for nome, (inicio, fim) in config.CRISES.items():
 # %% [markdown]
 # ## 6. Leitura e próximos passos
 #
-# **O que os dados mostram:** *(escrever depois de olhar os resultados acima)*
+# **O que os dados mostram:** o hedge custou em média 0,6% por operação. Todo o prejuízo veio dos meses de incerteza alta (-3,0%); em meses normais saiu ~0%.*
 #
 # **Cuidados:**
 # - O EPU mede incerteza de **política econômica** a partir de notícias; a crise de 2008,
@@ -218,4 +218,4 @@ for nome, (inicio, fim) in config.CRISES.items():
 # - Hedge de 1 contrato por mês, sem custos de corretagem e margem.
 #
 # **Próximo passo:** análise estatística (regressão do resultado do hedge no índice de
-# incerteza, com erros-padrão de Newey-West), já pronta no código em `analise.py`.
+# incerteza, com erros-padrão de Newey-West), já pronta no código em `analise.py`, mas não fiz para termos a versão qualitativa sobre o resultado financeiro primeiro.
