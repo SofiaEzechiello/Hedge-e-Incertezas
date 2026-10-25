@@ -7,6 +7,7 @@ import matplotlib
 matplotlib.use("Agg")  # salva sem abrir janela (funciona em qualquer terminal)
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from . import config
 
@@ -76,13 +77,14 @@ def grafico_futuro_vs_spot(base, horizonte, nome="futuro_vs_ptax.png"):
             label=f"PTAX efetiva {horizonte} meses depois")
     ax.legend(loc="upper left", frameon=True, facecolor="white", edgecolor="none", framealpha=0.9)
     _estilo(ax, "Dólar futuro vs. dólar que de fato ocorreu no vencimento", r"R\$ por US\$")
-    ax.xaxis.set_major_locator(mdates.YearLocator(1))
+    ax.xaxis.set_major_locator(mdates.YearLocator(2))
     ax.set_xlabel("Mês em que o hedge é contratado (t)", color=config.COR_TEXTO)
     return _salvar(fig, nome, "Fontes: B3 (preço de ajuste do DOL) e Banco Central (PTAX). "
                               "Elaboração própria.")
 
 
-FONTE_HEDGE = "Fontes: B3, Banco Central (PTAX, atas do COPOM, Focus). Elaboração própria."
+FONTE_HEDGE = ("Fontes: B3 (dólar futuro), Banco Central (PTAX) e Baker, Bloom e Davis "
+               "(EPU Brasil). Elaboração própria.")
 COR_ALTA = config.COR_SECUNDARIA      # laranja: incerteza alta
 COR_NORMAL = config.COR_PRINCIPAL     # azul: incerteza normal
 COR_SOMBRA = "#f3d9c4"                # faixa clara dos meses de incerteza alta
@@ -120,7 +122,7 @@ def grafico_resultado_hedge(base, lado, nome="5_resultado_hedge.png"):
     _estilo(ax2, "", f"Resultado do hedge (%)\nln(s_t+{config.HORIZONTE_HEDGE} / f_t)"
             if lado == "importador" else
             f"Resultado do hedge (%)\nln(f_t / s_t+{config.HORIZONTE_HEDGE})")
-    ax2.xaxis.set_major_locator(mdates.YearLocator(1))
+    ax2.xaxis.set_major_locator(mdates.YearLocator(2))
     ax2.set_xlabel("Mês em que o hedge é contratado (t)", color=config.COR_TEXTO)
 
     from matplotlib.patches import Patch
@@ -174,7 +176,7 @@ def grafico_acumulado(base, lado, nome="7_resultado_acumulado.png"):
     ax.axhline(0, color=config.COR_TEXTO, linewidth=0.8)
     _estilo(ax, f"Quanto o {lado} ganhou (ou perdeu) por fazer hedge todo mês",
             r"Ganho acumulado (R\$ milhões)")
-    ax.xaxis.set_major_locator(mdates.YearLocator(1))
+    ax.xaxis.set_major_locator(mdates.YearLocator(2))
     ax.set_xlabel("Mês em que o hedge é contratado (t)", color=config.COR_TEXTO)
 
     from matplotlib.patches import Patch
@@ -201,3 +203,134 @@ def grafico_componentes(resultado, nome="componentes.png"):
     ax.legend(loc="upper left", frameon=True, facecolor="white", edgecolor="none", framealpha=0.9)
     _estilo(ax, "Os dois componentes do indicador", "Desvios-padrão (z-score, 2006-2015)")
     return _salvar(fig, nome, FONTE_PADRAO)
+
+
+# ---------------------------------------------------------------------------
+# Gráficos da análise descritiva (EPU, alta x normal, crises, por ano)
+# ---------------------------------------------------------------------------
+COR_GANHO, COR_PERDA = "#1b998b", "#b22200"
+
+
+def _rotulo_barra(ax, barras, textos):
+    for barra, texto in zip(barras, textos):
+        altura = barra.get_height()
+        ax.annotate(texto, (barra.get_x() + barra.get_width() / 2, altura),
+                    xytext=(0, 4 if altura >= 0 else -12), textcoords="offset points",
+                    ha="center", fontsize=10, color=config.COR_TEXTO, fontweight="bold")
+
+
+def grafico_epu(base, nome="1_incerteza_epu.png"):
+    """O índice EPU nos meses do trabalho, com o limiar e as crises marcadas."""
+    dados = base.dropna(subset=["incerteza"])
+    limiar = dados["limiar_incerteza"].iloc[0]
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    for nome_crise, (ini, fim) in config.CRISES.items():
+        x0, x1 = pd.Period(ini, "M").to_timestamp(), (pd.Period(fim, "M") + 1).to_timestamp()
+        ax.axvspan(x0, x1, color="#e6e6e6", linewidth=0, zorder=0)
+        ax.text(x0, 0.97, " " + nome_crise, transform=ax.get_xaxis_transform(),
+                fontsize=7.5, color="#6b6b6b", va="top")
+    ax.plot(dados.index.to_timestamp(), dados["incerteza"], color=config.COR_TEXTO, linewidth=1.5)
+    ax.axhline(limiar, color=config.COR_SECUNDARIA, linewidth=1.2, linestyle="--")
+    ax.text(1.0, limiar, f" incerteza\n alta > {limiar:.0f}", transform=ax.get_yaxis_transform(),
+            va="center", fontsize=8, color=config.COR_SECUNDARIA)
+    _estilo(ax, "Incerteza de política econômica no Brasil (EPU)", "Índice EPU")
+    return _salvar(fig, nome, "Fonte: Baker, Bloom e Davis, www.PolicyUncertainty.com. "
+                              "Faixas cinza: crises.")
+
+
+def grafico_alta_vs_normal(cen, nome="6_alta_vs_normal.png"):
+    """Três números lado a lado para incerteza normal e alta."""
+    grupos = ["Incerteza normal", "Incerteza alta"]
+    cen = cen.loc[grupos]
+    cores = [config.COR_PRINCIPAL, config.COR_SECUNDARIA]
+    paineis = [
+        ("Resultado médio por operação", cen["resultado_medio_%"], "%", "{:+.1f}%"),
+        ("Meses em que o hedge compensou", cen["hedge_compensou_%"], "% dos meses", "{:.0f}%"),
+        ("Resultado total (1 contrato/mês)", cen["ganho_do_hedge_R$"] / 1000, "R$ mil", "{:+,.0f} mil"),
+    ]
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4.5))
+    for ax, (titulo, valores, ylabel, fmt) in zip(axes, paineis):
+        barras = ax.bar(["Normal", "Alta"], valores, color=cores, width=0.6)
+        _rotulo_barra(ax, barras, [fmt.format(v).replace(",", ".") for v in valores])
+        ax.axhline(0, color=config.COR_TEXTO, linewidth=0.8)
+        ax.margins(y=0.2)
+        ax.set_title(titulo, loc="left", fontsize=11, fontweight="bold", color=config.COR_TEXTO)
+        ax.set_ylabel(ylabel, color=config.COR_TEXTO)
+        ax.grid(axis="y", color=config.COR_GRADE, linewidth=0.6)
+        ax.set_axisbelow(True)
+        for lado in ("top", "right"):
+            ax.spines[lado].set_visible(False)
+    n_alta, n_normal = int(cen.loc["Incerteza alta", "meses"]), int(cen.loc["Incerteza normal", "meses"])
+    fig.suptitle(f"Hedge da importadora: incerteza normal ({n_normal} meses) x alta ({n_alta} meses)",
+                 x=0.01, ha="left", fontsize=13, fontweight="bold", color=config.COR_TEXTO)
+    fig.tight_layout()
+    return _salvar(fig, nome, "Incerteza alta: os 20% de meses com o EPU mais alto. " + FONTE_HEDGE)
+
+
+def grafico_crises(crises, nome="6_crises.png"):
+    """Resultado médio do hedge contratado em cada crise e fora delas."""
+    tabela = crises.drop("Total")
+    valores = tabela["resultado_medio_%"]
+    meses_pt = "jan fev mar abr mai jun jul ago set out nov dez".split()
+
+    def periodo(nome):
+        if nome not in config.CRISES:
+            return ""
+        i, f = (pd.Period(d, "M") for d in config.CRISES[nome])
+        return f"{meses_pt[i.month - 1]}/{i.year % 100:02d} a {meses_pt[f.month - 1]}/{f.year % 100:02d}, "
+
+    rotulos = [f"{n}\n({periodo(n)}{m} meses)" for n, m in zip(tabela.index, tabela["meses"])]
+    fig, ax = plt.subplots(figsize=(10, 4))
+    y = range(len(tabela))[::-1]
+    barras = ax.barh(list(y), valores, color=[COR_GANHO if v > 0 else COR_PERDA for v in valores],
+                     height=0.6)
+    ax.set_yticks(list(y), rotulos)
+    for barra, v, r in zip(barras, valores, tabela["resultado_total_R$"]):
+        ax.annotate(f"{v:+.1f}%  (R$ {r / 1000:+,.0f} mil)".replace(",", "."),
+                    (v, barra.get_y() + barra.get_height() / 2),
+                    xytext=(6 if v >= 0 else -6, 0), textcoords="offset points",
+                    ha="left" if v >= 0 else "right", va="center", fontsize=9,
+                    color=config.COR_TEXTO)
+    ax.axvline(0, color=config.COR_TEXTO, linewidth=0.8)
+    ax.margins(x=0.45)
+    ax.set_title("Resultado médio do hedge contratado em cada crise (% por operação)", loc="left",
+                 fontsize=13, fontweight="bold", color=config.COR_TEXTO)
+    ax.grid(axis="x", color=config.COR_GRADE, linewidth=0.6)
+    ax.set_axisbelow(True)
+    for lado in ("top", "right"):
+        ax.spines[lado].set_visible(False)
+    return _salvar(fig, nome, "Pelo mês em que o hedge foi contratado. Verde: o hedge compensou "
+                              "em média. " + FONTE_HEDGE)
+
+
+def grafico_por_ano(anos, nome="6_por_ano.png"):
+    """Incerteza média e resultado do hedge, ano a ano."""
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 7), sharex=True,
+                                   gridspec_kw={"height_ratios": [1, 1.3], "hspace": 0.3})
+    ax1.bar(anos.index, anos["incerteza_media"], color=config.COR_TEXTO, width=0.7)
+    ax1.set_title("Incerteza média do ano (EPU)", loc="left", fontsize=12,
+                  fontweight="bold", color=config.COR_TEXTO)
+    resultado = anos["resultado_total_R$"] / 1000
+    ax2.bar(anos.index, resultado, width=0.7,
+            color=[COR_GANHO if v > 0 else COR_PERDA for v in resultado])
+    ax2.axhline(0, color=config.COR_TEXTO, linewidth=0.8)
+    ax2.set_title("Resultado do hedge contratado no ano (1 contrato por mês)", loc="left",
+                  fontsize=12, fontweight="bold", color=config.COR_TEXTO)
+    ax2.set_ylabel(r"R\$ mil  (verde = compensou)", color=config.COR_TEXTO)
+    ax1.set_ylabel("Índice EPU", color=config.COR_TEXTO)
+    for ax in (ax1, ax2):
+        ax.grid(axis="y", color=config.COR_GRADE, linewidth=0.6)
+        ax.set_axisbelow(True)
+        for lado in ("top", "right"):
+            ax.spines[lado].set_visible(False)
+    ax2.set_xticks(anos.index)
+    ax2.tick_params(axis="x", rotation=45)
+    return _salvar(fig, nome, FONTE_HEDGE)
+
+
+def graficos_descritivos(base, cen, crises, anos):
+    """Gera todos os gráficos da análise descritiva de uma vez."""
+    grafico_epu(base)
+    grafico_alta_vs_normal(cen)
+    grafico_crises(crises)
+    grafico_por_ano(anos)

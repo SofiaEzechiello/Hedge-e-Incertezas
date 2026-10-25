@@ -118,3 +118,40 @@ def texto_conclusao(reg, lado=config.LADO_EMPRESA):
         f"Esse efeito {signif} estatisticamente diferente de zero a 5% "
         f"(p = {p['beta_p']:.3f}, Newey-West, n = {p['n']:.0f})."
     )
+
+
+
+# ---------------------------------------------------------------------------
+# Análise descritiva (sem regressão)
+# ---------------------------------------------------------------------------
+def _resumo_descritivo(g):
+    return pd.Series({
+        "meses": len(g),
+        "incerteza_media": g["incerteza"].mean(),
+        "resultado_medio_%": 100 * g["resultado"].mean(),
+        "hedge_compensou_%": 100 * g["hedge_compensou"].astype(float).mean(),
+        "resultado_total_R$": g["resultado_reais"].sum(),
+    })
+
+
+def por_ano(base):
+    """Resultado do hedge por ano em que foi contratado."""
+    dados = amostra_completa(base)
+    tabela = dados.groupby(dados.index.year).apply(_resumo_descritivo, include_groups=False)
+    tabela.index.name = "ano"
+    return tabela.astype({"meses": int})
+
+
+def por_episodio(base, crises=None):
+    """Resultado do hedge contratado durante cada crise e fora delas."""
+    crises = config.CRISES if crises is None else crises
+    dados = amostra_completa(base)
+    dados["episodio"] = "Fora das crises"
+    for nome, (inicio, fim) in crises.items():
+        dentro = (dados.index >= pd.Period(inicio, "M")) & (dados.index <= pd.Period(fim, "M"))
+        dados.loc[dentro, "episodio"] = nome
+    tabela = dados.groupby("episodio").apply(_resumo_descritivo, include_groups=False)
+    ordem = [n for n in crises if n in tabela.index] + ["Fora das crises"]
+    tabela = tabela.loc[[n for n in ordem if n in tabela.index]]
+    tabela.loc["Total"] = _resumo_descritivo(dados)
+    return tabela.astype({"meses": int})

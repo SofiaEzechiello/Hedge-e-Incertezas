@@ -133,3 +133,23 @@ TAMANHO_CONTRATO_USD = 50_000
 # A empresa simulada compra 1 contrato por mês (US$ 50 mil). Substitui o
 # US$ 1 milhão definido mais acima.
 EXPOSICAO_USD = TAMANHO_CONTRATO_USD
+
+
+# Índice de incerteza usado no trabalho
+# "epu": EPU Brasil de Baker, Bloom e Davis (policyuncertainty.com), gratuito.
+# "replica": a réplica do IIE-Br com atas do COPOM. NÃO usar: muda de nível
+#            quando o Banco Central muda o formato das atas (2016 e 2020).
+FONTE_INCERTEZA = "epu"
+URL_EPU = "https://www.policyuncertainty.com/media/Brazil_Policy_Uncertainty_Data.xlsx"
+ARQUIVO_EPU = DADOS_BRUTOS / "Brazil_Policy_Uncertainty_Data.xlsx"
+
+# Mês de incerteza alta = acima deste percentil do índice nos meses da amostra
+# do hedge (0.80 = os 20% de meses mais incertos).
+PERCENTIL_INCERTEZA_ALTA = 0.80
+
+# Episódios de crise, pelo mês em que o hedge é contratado (início, fim)
+CRISES = {
+    "Crise financeira global": ("2008-09", "2009-03"),
+    "Recessão e impeachment": ("2015-01", "2016-08"),
+    "Pandemia": ("2020-02", "2020-12"),
+}
