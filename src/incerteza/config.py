@@ -118,3 +118,18 @@ COR_SECUNDARIA = "#e8730c"  # laranja
 COR_TERCIARIA = "#1b998b"   # verde-água
 COR_TEXTO = "#3d3d3d"
 COR_GRADE = "#d9d9d9"
+
+# Planilha do Bernardo: dólar futuro desde 2006 (extraído dos BDIs da B3)
+
+# Se este arquivo existir, o passo 2 usa a planilha e não baixa nada da B3.
+ARQUIVO_FUTUROS_PLANILHA = DADOS_BRUTOS / "dolar_futuro_t4_bdi_a_partir_2006-07.xlsx"
+
+# PTAX venda diária (para pegar a PTAX exata do dia da liquidação)
+SGS_PTAX_DIARIA = 1
+
+# Tamanho do contrato cheio de dólar futuro (DOL): US$ 50.000
+TAMANHO_CONTRATO_USD = 50_000
+
+# A empresa simulada compra 1 contrato por mês (US$ 50 mil). Substitui o
+# US$ 1 milhão definido mais acima.
+EXPOSICAO_USD = TAMANHO_CONTRATO_USD

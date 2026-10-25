@@ -39,10 +39,7 @@ from incerteza import (  # noqa: E402
 def titulo(texto):
     print(f"\n{'=' * 60}\n{texto}\n{'=' * 60}")
 
-
-# ---------------------------------------------------------------------------
 # Passo 1: incerteza
-# ---------------------------------------------------------------------------
 def calcular_incerteza(modo, atas, focus):
     opcoes = config.MODOS[modo]
     texto_mensal = copom.indice_texto_mensal(copom.indice_texto(atas, opcoes))
@@ -90,9 +87,8 @@ def passo1_incerteza(atualizar):
     return principal["iiebr"]
 
 
-# ---------------------------------------------------------------------------
 # Passos 2 e 3: câmbio
-# ---------------------------------------------------------------------------
+
 def passo2_futuro(atualizar):
     titulo(f"2. Dólar futuro (contrato que liquida em {config.HORIZONTE_HEDGE} meses)")
     dol = cambio.baixar_futuros_mensais(forcar=atualizar)
@@ -113,9 +109,7 @@ def passo3_ptax(atualizar, dol):
     return ptax
 
 
-# ---------------------------------------------------------------------------
 # Passo 4: base casada
-# ---------------------------------------------------------------------------
 def passo4_base(incerteza, ptax, futuro):
     titulo("4. Base casada: futuro em t x PTAX em t + 3")
     base = base_hedge.montar_base(incerteza, ptax, futuro)
@@ -130,9 +124,8 @@ def passo4_base(incerteza, ptax, futuro):
     return base
 
 
-# ---------------------------------------------------------------------------
 # Passo 5: resultado do hedge
-# ---------------------------------------------------------------------------
+
 def passo5_resultado(base):
     lado = config.LADO_EMPRESA
     titulo(f"5. Resultado do hedge do {lado}")
@@ -151,9 +144,7 @@ def passo5_resultado(base):
     graficos.grafico_acumulado(base, lado, nome="5_resultado_acumulado.png")
 
 
-# ---------------------------------------------------------------------------
 # Passo 6: análise estatística
-# ---------------------------------------------------------------------------
 def passo6_analise(base):
     titulo("6. O resultado do hedge depende da incerteza?")
 

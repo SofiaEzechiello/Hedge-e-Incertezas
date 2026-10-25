@@ -151,9 +151,7 @@ def series_mensais(brutos, opcoes):
     return pd.concat(partes, axis=1).sort_index()
 
 
-# ---------------------------------------------------------------------------
 # Dispersão -> índice de expectativas
-# ---------------------------------------------------------------------------
 def indice_expectativas(mensal, opcoes):
     """
     Coeficiente de variação (desvio / média) de cada variável, e a média dos três.
