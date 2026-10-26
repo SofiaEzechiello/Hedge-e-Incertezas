@@ -2,7 +2,7 @@
 
 Trabalho de Derivativos e Riscos (UFRGS) 
 
- Sofia Ezechiello e Bernardo.
+ Bernardo Chevarria e Sofia Ezechiello.
 
 **A pergunta.** Uma empresa **importadora** compra mercadoria em dólar todo mês e paga 3
 meses depois. Para não correr o risco de o dólar subir, ela trava o câmbio comprando dólar
