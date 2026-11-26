@@ -1,5 +1,5 @@
 """
-Gráficos do indicador. Cada função recebe séries mensais (PeriodIndex) e salva um PNG.
+Gráficos do trabalho. Cada função recebe a base mensal (PeriodIndex) e salva um PNG em figuras/.
 """
 
 import matplotlib
@@ -10,8 +10,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from . import config
-
-FONTE_PADRAO = "Fonte: Banco Central (atas do COPOM e Focus). Elaboração própria."
 
 
 def _estilo(ax, titulo, ylabel):
@@ -36,31 +34,6 @@ def _salvar(fig, nome, fonte):
     fig.savefig(caminho, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return caminho
-
-
-def _linha_base(ax, valor=100):
-    ax.axhline(valor, color="#8c8c8c", linewidth=0.8, linestyle="--")
-
-
-def grafico_indicador(serie, titulo, nome="iiebr.png"):
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(serie.index.to_timestamp(), serie, color=config.COR_PRINCIPAL, linewidth=2)
-    _linha_base(ax)
-    _estilo(ax, titulo, "Índice (100 = média 2006-2015)")
-    return _salvar(fig, nome, FONTE_PADRAO)
-
-
-def grafico_comparacao(series, titulo, nome, fonte=FONTE_PADRAO):
-    """series: dicionário {rótulo: série}. Até 3 séries."""
-    cores = [config.COR_PRINCIPAL, config.COR_SECUNDARIA, config.COR_TERCIARIA]
-    fig, ax = plt.subplots(figsize=(10, 5))
-    for (rotulo, serie), cor in zip(series.items(), cores):
-        serie = serie.dropna()
-        ax.plot(serie.index.to_timestamp(), serie, color=cor, linewidth=2, label=rotulo)
-    _linha_base(ax)
-    ax.legend(loc="upper left", frameon=True, facecolor="white", edgecolor="none", framealpha=0.9)
-    _estilo(ax, titulo, "Índice (100 = média 2006-2015)")
-    return _salvar(fig, nome, fonte)
 
 
 def grafico_futuro_vs_spot(base, horizonte, nome="futuro_vs_ptax.png"):
@@ -133,38 +106,6 @@ def grafico_resultado_hedge(base, lado, nome="5_resultado_hedge.png"):
     return _salvar(fig, nome, FONTE_HEDGE)
 
 
-def grafico_dispersao(base, reg, lado, nome="6_incerteza_vs_resultado.png"):
-    """Cada ponto é um mês: incerteza em t no eixo x, resultado do hedge no eixo y."""
-    import numpy as np
-
-    dados = base.dropna(subset=["resultado", "incerteza"])
-    p = reg.loc["Principal"]
-    cores = [COR_ALTA if a else COR_NORMAL for a in dados["incerteza_alta"]]
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-    ax.scatter(dados["incerteza"], 100 * dados["resultado"], c=cores, s=40,
-               edgecolor="white", linewidth=1, zorder=3)
-    xs = np.linspace(dados["incerteza"].min(), dados["incerteza"].max(), 50)
-    ys = 100 * (p["alfa"] + p["beta"] * (xs - reg.attrs.get("media_incerteza", config.MEDIA_BASE)))
-    ax.plot(xs, ys, color=config.COR_TEXTO, linewidth=2)
-    ax.axhline(0, color="#8c8c8c", linewidth=0.8)
-    ax.axvline(config.LIMIAR_INCERTEZA, color=COR_ALTA, linewidth=1, linestyle="--")
-
-    ax.set_title(f"O resultado do hedge do {lado} depende da incerteza?", loc="left",
-                 fontsize=13, fontweight="bold", color=config.COR_TEXTO, pad=28)
-    ax.text(0, 1.02, f"Reta: β = {100 * p['beta']:.3f} p.p. por ponto de incerteza "
-                     f"(p = {p['beta_p']:.3f}, Newey-West).  Laranja: incerteza acima de "
-                     f"{config.LIMIAR_INCERTEZA}.",
-            transform=ax.transAxes, fontsize=9, color="#6b6b6b")
-    ax.set_xlabel("Incerteza no mês da contratação (U_t)", color=config.COR_TEXTO)
-    ax.set_ylabel("Resultado do hedge (%)", color=config.COR_TEXTO)
-    ax.grid(color=config.COR_GRADE, linewidth=0.6)
-    ax.set_axisbelow(True)
-    for lado_ax in ("top", "right"):
-        ax.spines[lado_ax].set_visible(False)
-    return _salvar(fig, nome, FONTE_HEDGE)
-
-
 def grafico_acumulado(base, lado, nome="7_resultado_acumulado.png"):
     """Ganho acumulado (R$) de fazer hedge todo mês em vez de nunca fazer."""
     dados = base.dropna(subset=["resultado_reais"])
@@ -186,23 +127,6 @@ def grafico_acumulado(base, lado, nome="7_resultado_acumulado.png"):
     exposicao = f"US$ {config.EXPOSICAO_USD:,.0f}".replace(",", ".")
     return _salvar(fig, nome, f"Empresa simulada: {exposicao} por mês, hedge de "
                               f"{config.HORIZONTE_HEDGE} meses. {FONTE_HEDGE}")
-
-
-def grafico_componentes(resultado, nome="componentes.png"):
-    """Os dois componentes lado a lado, ambos em desvios-padrão (z-score)."""
-    from .indicador import padronizar  # import local evita ciclo
-
-    texto = padronizar(resultado["componente_texto"])
-    exp = padronizar(resultado["componente_expectativas"])
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(texto.index.to_timestamp(), texto, color=config.COR_PRINCIPAL,
-            linewidth=2, label="Texto (atas do COPOM)")
-    ax.plot(exp.index.to_timestamp(), exp, color=config.COR_SECUNDARIA,
-            linewidth=2, label="Expectativas (Focus)")
-    ax.axhline(0, color="#8c8c8c", linewidth=0.8, linestyle="--")
-    ax.legend(loc="upper left", frameon=True, facecolor="white", edgecolor="none", framealpha=0.9)
-    _estilo(ax, "Os dois componentes do indicador", "Desvios-padrão (z-score, 2006-2015)")
-    return _salvar(fig, nome, FONTE_PADRAO)
 
 
 # ---------------------------------------------------------------------------
@@ -334,26 +258,3 @@ def graficos_descritivos(base, cen, crises, anos):
     grafico_alta_vs_normal(cen)
     grafico_crises(crises)
     grafico_por_ano(anos)
-
-
-def grafico_fac_facp(tabela, n, nome="7_fac_facp_residuos.png"):
-    """FAC e FACP dos resíduos do modelo principal, com a banda de 95% (±1,96/√n)."""
-    banda = 1.96 / n ** 0.5
-    fig, eixos = plt.subplots(1, 2, figsize=(11, 4.5), sharey=True)
-    for ax, col, titulo in ((eixos[0], "fac", "FAC dos resíduos"),
-                            (eixos[1], "facp", "FACP dos resíduos")):
-        fora = tabela[col].abs() > banda
-        cores = [config.COR_SECUNDARIA if f else config.COR_PRINCIPAL for f in fora]
-        ax.bar(tabela.index, tabela[col], color=cores, width=0.6, zorder=3)
-        ax.axhline(0, color="#8c8c8c", linewidth=0.8)
-        for sinal in (1, -1):
-            ax.axhline(sinal * banda, color="#8c8c8c", linewidth=0.8, linestyle="--")
-        ax.set_title(titulo, loc="left", fontsize=12, fontweight="bold", color=config.COR_TEXTO)
-        ax.set_xlabel("Defasagem (meses)", color=config.COR_TEXTO)
-        ax.set_xticks(list(tabela.index))
-        ax.grid(axis="y", color=config.COR_GRADE, linewidth=0.6)
-        ax.set_axisbelow(True)
-        for lado in ("top", "right"):
-            ax.spines[lado].set_visible(False)
-    return _salvar(fig, nome, "Laranja: fora da banda de 95%. Elaboração própria.")
-

@@ -37,10 +37,7 @@ import pandas as pd
 # Permite "import incerteza" sem instalar o pacote
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from incerteza import (  # noqa: E402
-    analise, base_hedge, cambio, config, copom, epu, expectativas, graficos, indicador,
-    regressao,
-)
+from incerteza import analise, base_hedge, cambio, config, epu, graficos, regressao  # noqa: E402
 
 
 def titulo(texto):
@@ -48,64 +45,11 @@ def titulo(texto):
 
 
 # Passo 1: incerteza
-def calcular_incerteza(modo, atas, focus):
-    opcoes = config.MODOS[modo]
-    texto_mensal = copom.indice_texto_mensal(copom.indice_texto(atas, opcoes))
-    indice_exp = expectativas.indice_expectativas(
-        expectativas.series_mensais(focus, opcoes), opcoes
-    )
-    resultado = indicador.consolidar(texto_mensal, indice_exp, opcoes)
-    resultado.to_csv(config.DADOS_PROCESSADOS / f"iiebr_{modo}.csv", index_label="mes")
-    return resultado
-
-
 def passo1_incerteza(atualizar):
-    if config.FONTE_INCERTEZA == "epu":
-        titulo("1. Série de incerteza (EPU Brasil, Baker, Bloom e Davis)")
-        serie = epu.baixar_epu(forcar=atualizar)
-        print(f"{len(serie)} meses, de {serie.index.min()} a {serie.index.max()}")
-        return serie
-    return passo1_replica(atualizar)
-
-
-def passo1_replica(atualizar):
-    titulo("1. Série de incerteza (réplica do IIE-Br)")
-    atas = copom.baixar_atas(forcar=atualizar)
-    palavras = atas["texto"].fillna("").astype(str).str.split().str.len()
-    vazias = atas.loc[palavras < 200, "nroReuniao"].tolist()
-    print(f"{len(atas)} atas; {len(vazias)} com texto vazio ou quase vazio"
-          + (f" (reuniões {vazias})" if vazias else ""))
-    focus = expectativas.baixar_expectativas(forcar=atualizar)
-    resultados = {modo: calcular_incerteza(modo, atas, focus) for modo in config.MODOS}
-
-    for modo, r in resultados.items():
-        serie = r["iiebr"]
-        print(f"[{modo}] {serie.index.min()} a {serie.index.max()}, "
-              f"pico {serie.max():.1f} em {serie.idxmax()}, "
-              f"peso efetivo do texto: {indicador.contribuicao_texto(r):.0%}")
-
-    principal = resultados[config.MODO_TRABALHO]
-    graficos.grafico_indicador(principal["iiebr"], "Indicador de incerteza da economia brasileira",
-                               nome="1_incerteza.png")
-    graficos.grafico_componentes(principal, nome="1_componentes_incerteza.png")
-    graficos.grafico_comparacao(
-        {"Notebook original": resultados["original"]["iiebr"],
-         "Versão corrigida": resultados["corrigido"]["iiebr"]},
-        "O que muda com as correções", nome="1_original_vs_corrigido.png",
-    )
-
-    fgv = indicador.ler_fgv()
-    if fgv is not None:
-        graficos.grafico_comparacao(
-            {"Réplica": principal["iiebr"], "FGV (IIE-Br oficial)": fgv},
-            "Réplica vs. IIE-Br oficial da FGV", nome="1_vs_fgv.png",
-            fonte="Fontes: Banco Central e FGV IBRE (IIE-Br). Elaboração própria.",
-        )
-        stats = indicador.comparar_com_fgv(principal["iiebr"], fgv)
-        print(f"vs FGV: corr. nível {stats['correlacao_nivel']:.2f}, "
-              f"corr. variação {stats['correlacao_variacao']:.2f} ({stats['meses_em_comum']} meses)")
-
-    return principal["iiebr"]
+    titulo("1. Série de incerteza (EPU Brasil, Baker, Bloom e Davis)")
+    serie = epu.baixar_epu(forcar=atualizar)
+    print(f"{len(serie)} meses, de {serie.index.min()} a {serie.index.max()}")
+    return serie
 
 
 # Passos 2 e 3: câmbio
@@ -146,12 +90,12 @@ def passo3_ptax(atualizar, dol, futuro):
 # Passo 4: base casada
 def passo4_base(incerteza, ptax, futuro, ptax_liq=None):
     titulo("4. Base casada: futuro em t x PTAX em t + 3")
-    if config.FONTE_INCERTEZA == "epu":
-        # Incerteza alta = acima do percentil escolhido, nos meses da amostra do hedge
-        amostra = incerteza.reindex(futuro.index).dropna()
-        config.LIMIAR_INCERTEZA = round(amostra.quantile(config.PERCENTIL_INCERTEZA_ALTA))
-        print(f"Incerteza alta: índice acima de {config.LIMIAR_INCERTEZA} "
-              f"(percentil {config.PERCENTIL_INCERTEZA_ALTA:.0%} da amostra)")
+    # Incerteza alta = acima do percentil escolhido, nos meses da amostra do hedge
+    # (percentil da amostra inteira: não é uma regra ex ante)
+    amostra = incerteza.reindex(futuro.index).dropna()
+    config.LIMIAR_INCERTEZA = round(amostra.quantile(config.PERCENTIL_INCERTEZA_ALTA))
+    print(f"Incerteza alta: índice acima de {config.LIMIAR_INCERTEZA} "
+          f"(percentil {config.PERCENTIL_INCERTEZA_ALTA:.0%} da amostra)")
     base = base_hedge.montar_base(incerteza, ptax, futuro, ptax_liquidacao=ptax_liq)
     base["limiar_incerteza"] = config.LIMIAR_INCERTEZA
     base.to_csv(config.DADOS_PROCESSADOS / "base_hedge.csv")
@@ -163,133 +107,3 @@ def passo4_base(incerteza, ptax, futuro, ptax_liq=None):
 
     graficos.grafico_futuro_vs_spot(base, config.HORIZONTE_HEDGE, nome="4_futuro_vs_ptax.png")
     return base
-
-
-# Passo 5: resultado do hedge
-def passo5_resultado(base):
-    lado = config.LADO_EMPRESA
-    titulo(f"5. Resultado do hedge do {lado}")
-    dados = analise.amostra_completa(base)
-    formula = ("ln(s_t+3 / f_t)" if lado == "importador" else "ln(f_t / s_t+3)")
-    print(f"Medida: {formula}  (> 0 = o hedge deixou a empresa melhor do que sem hedge)")
-    print(f"{len(dados)} operações já vencidas")
-    print(f"Resultado médio: {100 * dados['resultado'].mean():+.2f}% por operação de "
-          f"{config.HORIZONTE_HEDGE} meses")
-    print(f"O hedge compensou em {100 * dados['hedge_compensou'].astype(float).mean():.0f}% "
-          f"dos meses")
-    total = dados["resultado_reais"].sum()
-    exposicao = f"{config.EXPOSICAO_USD:,.0f}".replace(",", ".")
-    print(f"Resultado acumulado com US$ {exposicao}/mês (1 contrato): "
-          f"R$ {total:,.0f}".replace(",", "."))
-    graficos.grafico_resultado_hedge(base, lado, nome="5_resultado_hedge.png")
-    graficos.grafico_acumulado(base, lado, nome="5_resultado_acumulado.png")
-
-
-# Passo 6: análise descritiva (sem regressão por enquanto)
-def passo6_descritivo(base):
-    titulo("6. O que aconteceu com o hedge em cada situação")
-    pd_opcoes = {"float_format": lambda x: f"{x:,.2f}"}
-
-    cen = analise.cenarios(base).astype({"meses": int})
-    cen.to_csv(config.DADOS_PROCESSADOS / "cenarios.csv")
-    print(f"Incerteza alta (índice > {config.LIMIAR_INCERTEZA}) x normal:")
-    print(cen.to_string(**pd_opcoes))
-
-    crises = analise.por_episodio(base)
-    crises.to_csv(config.DADOS_PROCESSADOS / "por_crise.csv")
-    print("\nNas crises e fora delas (pelo mês em que o hedge foi contratado):")
-    print(crises.to_string(**pd_opcoes))
-
-    anos = analise.por_ano(base)
-    anos.to_csv(config.DADOS_PROCESSADOS / "por_ano.csv")
-    print("\nPor ano:")
-    print(anos.to_string(**pd_opcoes))
-    graficos.graficos_descritivos(base, cen, crises, anos)
-    
-
-
-# Passo 7: regressão econométrica
-def passo7_regressao(base, ate=None):
-    titulo("7. Regressão: o resultado do hedge depende da incerteza?")
-    pd.set_option("display.width", 200)
-    saida = config.DADOS_PROCESSADOS
-    out = regressao.estimar(base, ate=ate)
-    d = out["dados"]
-
-    print("Modelo: H_t = ln(S_t+3 / F_t) = b0 + b1·U_t + b2·ln(F_t / S_t) + e_t   (importador)")
-    print(f"Amostra: {d.index.min()} a {d.index.max()}, {len(d)} cohorts"
-          + (f" (hedges contratados até {ate})" if ate else ""))
-
-    print("\n7.1 Estacionariedade (ADF; H0: raiz unitária)")
-    adf = out["adf"]
-    cols = ["amostra", "descricao", "adf_estatistica", "adf_p", "adf_lags",
-            "adf_p_com_tendencia", "kpss_p", "decisao"]
-    print(adf[cols].to_string(float_format=lambda x: f"{x:,.3f}"))
-    if adf[adf["amostra"] == "principal"].loc["H", "decisao"] == "raiz unitária":
-        print("ATENÇÃO: o próprio H (erro de previsão do hedge) saiu com raiz unitária. "
-              "O código não diferencia o H; confira o ADF com tendência e o KPSS.")
-    if out["diferenciar"]:
-        print(f"-> Raiz unitária em {', '.join(out['diferenciar'])}: entram em primeira "
-              f"diferença no modelo principal.")
-    else:
-        print("-> Todas estacionárias em nível: o modelo é estimado em níveis.")
-    adf.to_csv(saida / "regressao_adf.csv")
-
-    print("\n7.2 Câmbio e incerteza no mesmo mês: dlnS_t = a0 + a1·dU_t + u_t")
-    c = regressao.regressao_cambio_incerteza(base, ate=ate)
-    print(f"a1 = {c['alfa1']:.5f} (EP {c['alfa1_ep']:.5f}, p = {c['alfa1_p']:.3f}, n = {c['n']})")
-    pd.Series(c).to_csv(saida / "regressao_cambio_incerteza.csv", header=["valor"])
-
-    print("\n7.3 Exogeneidade fraca (Wald com Newey-West):")
-    exo = regressao.teste_exogeneidade_fraca(d)
-    print(exo.to_string(float_format=lambda x: f"{x:,.3f}"))
-    print("   Esperado: defasagens sem efeito (p alto); adiantamentos podem ter efeito.")
-    exo.to_csv(saida / "regressao_exogeneidade.csv")
-
-    print("\n7.4 Resíduos do modelo principal (MQO): FAC, FACP e Ljung-Box")
-    fac, lb = regressao.diagnostico_residuos(out["principal"])
-    print(fac.to_string(float_format=lambda x: f"{x:,.3f}"))
-    print(lb.to_string(float_format=lambda x: f"{x:,.4f}"))
-    fac.to_csv(saida / "regressao_residuos_fac.csv")
-    caminho = regressao.grafico_fac_facp(fac, n=int(out["principal"].nobs))
-    print(f"Figura: {caminho}")
-
-    print("\n7.5 Sensibilidade do erro-padrão de b1 ao tamanho do Newey-West:")
-    sens = regressao.sensibilidade_lags(d)
-    print(sens.to_string(float_format=lambda x: f"{x:,.5f}"))
-    sens.to_csv(saida / "regressao_lags_hac.csv")
-
-    print(f"\n7.6 Especificações (p com Newey-West L = {config.LAGS_NEWEY_WEST}):")
-    tab = out["especificacoes"]
-    cols = ["transformacao", "n", "beta1", "beta1_ep", "beta1_p", "beta1_p_mqo",
-            "beta2", "beta2_p", "b_fama", "r2"]
-    print(tab[cols].to_string(float_format=lambda x: f"{x:,.4f}"))
-    tab.to_csv(saida / "regressao_especificacoes.csv")
-
-    print("\nLeitura do modelo principal:")
-    print(regressao.texto_conclusao(tab, out["diferenciar"]))
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--atualizar", action="store_true", help="ignora o cache e baixa tudo de novo")
-    parser.add_argument("--ate", default=None, metavar="AAAA-MM",
-                        help="regressão só com hedges contratados até este mês (ex.: 2024-12)")
-    args = parser.parse_args()
-    config.DADOS_PROCESSADOS.mkdir(parents=True, exist_ok=True)
-
-    incerteza = passo1_incerteza(args.atualizar)
-    dol, futuro = passo2_futuro(args.atualizar)
-    ptax, ptax_liq = passo3_ptax(args.atualizar, dol, futuro)
-    base = passo4_base(incerteza, ptax, futuro, ptax_liq)
-    passo5_resultado(base)
-    passo6_descritivo(base)
-    passo7_regressao(base, ate=args.ate)
-
-    print(f"\nPronto. Base em {config.DADOS_PROCESSADOS / 'base_hedge.csv'}, "
-          f"gráficos em {config.FIGURAS}")
-
-
-if __name__ == "__main__":
-    main()

@@ -1,4 +1,4 @@
-"""Testes da análise (passo 6) com dados simulados de β conhecido."""
+"""Testes da análise descritiva (passo 6) com dados simulados."""
 
 import sys
 from pathlib import Path
@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from incerteza import analise, base_hedge, config  # noqa: E402
+from incerteza import analise, base_hedge  # noqa: E402
 
 
 def base_simulada(beta_imp, lado="importador", n=300, semente=0):
@@ -28,35 +28,6 @@ def base_simulada(beta_imp, lado="importador", n=300, semente=0):
     return base_hedge.montar_base(incerteza, ptax, futuro, lado=lado)
 
 
-def test_regressao_recupera_beta_conhecido():
-    reg = analise.regressoes(base_simulada(beta_imp=0.002))
-    p = reg.loc["Principal"]
-    assert p["beta"] == pytest.approx(0.002, abs=0.0005)
-    assert p["alfa"] == pytest.approx(0.01, abs=0.005)
-    assert p["beta_p"] < 0.01
-
-
-def test_beta_zero_nao_e_significativo():
-    reg = analise.regressoes(base_simulada(beta_imp=0.0, semente=3))
-    assert reg.loc["Principal", "beta_p"] > 0.05
-
-
-def test_importador_e_exportador_sao_espelhos_exatos():
-    imp = analise.regressoes(base_simulada(0.002, "importador")).loc["Principal"]
-    exp = analise.regressoes(base_simulada(0.002, "exportador")).loc["Principal"]
-    assert exp["beta"] == pytest.approx(-imp["beta"])
-    assert exp["alfa"] == pytest.approx(-imp["alfa"])
-    assert exp["beta_ep"] == pytest.approx(imp["beta_ep"])     # mesmo erro-padrão
-    assert exp["r2"] == pytest.approx(imp["r2"])
-
-
-def test_robustez_tem_as_quatro_especificacoes():
-    reg = analise.regressoes(base_simulada(0.002))
-    assert len(reg) == 4
-    sem_sobreposicao = reg.loc["Sem sobreposição (jan/abr/jul/out)"]
-    assert sem_sobreposicao["n"] == pytest.approx(300 / 3, abs=1)
-
-
 def test_cenarios_somam_certo():
     base = base_simulada(0.002)
     cen = analise.cenarios(base)
@@ -69,7 +40,6 @@ def test_cenarios_somam_certo():
     assert total["ganho_do_hedge_R$"] == pytest.approx(total["sem_hedge_R$"] - total["com_hedge_R$"])
     # com β > 0, o hedge do importador rende mais com incerteza alta
     assert cen.loc["Incerteza alta", "resultado_medio_%"] > cen.loc["Incerteza normal", "resultado_medio_%"]
-
 
 
 def test_ultimos_meses_sem_vencimento_ficam_fora_da_analise():
