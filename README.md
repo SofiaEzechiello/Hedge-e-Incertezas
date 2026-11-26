@@ -86,10 +86,9 @@ tamanho do Newey-West) estão em `data/processed/regressao_*.csv`.
 ## Como rodar
 
 1. Abra a pasta do projeto no VS Code (**Arquivo → Abrir Pasta**).
-2. **Coloque a planilha do dólar futuro em `data/raw/`**, com o nome começando por
-   `dolar_futuro` (ex.: `dolar_futuro_t4_bdi_a_partir_2006-07.xlsx`). Ela não está no
-   GitHub porque a pasta `data/raw` fica fora do Git. A base final já pronta está em
-   `data/processed/base_hedge.csv`.
+2. 2. Os dados brutos usados no trabalho já estão em `data/raw/`: a planilha do dólar futuro
+   (`dolar_futuro_t4_bdi_a_partir_2006-07.xlsx`, extraída dos Boletins Diários da B3 pelo
+   Bernardo), o EPU e a PTAX. Para baixar EPU e PTAX de novo, use `python main.py --atualizar`.
 3. No terminal do VS Code (**Ctrl + '**), com Python 3.10 ou mais novo:
 
    ```bash
