@@ -222,3 +222,114 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+"""
+Passo 7: regressão do resultado do hedge na incerteza.
+
+Antes, rode `python main.py` uma vez: ele cria data/processed/base_hedge.csv,
+que este script lê.
+
+Uso:
+    python rodar_regressao.py                  # todos os meses
+    python rodar_regressao.py --ate 2024-12    # só hedges contratados até dez/2024
+
+Saídas:
+    data/processed/regressao_*.csv    <- as tabelas
+    figuras/7_fac_facp_residuos.png   <- FAC e FACP dos resíduos
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+# Permite "import incerteza" sem instalar o pacote
+RAIZ = Path(__file__).resolve().parent
+sys.path.insert(0, str(RAIZ / "src"))
+
+from incerteza import config, regressao  # noqa: E402
+
+
+def titulo(texto):
+    print(f"\n{'=' * 60}\n{texto}\n{'=' * 60}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--ate", default=None, metavar="AAAA-MM",
+                        help="só hedges contratados até este mês (ex.: 2024-12)")
+    args = parser.parse_args()
+    ate = args.ate
+
+    arquivo = config.DADOS_PROCESSADOS / "base_hedge.csv"
+    if not arquivo.exists():
+        sys.exit(f"Não achei {arquivo}. Rode `python main.py` antes.")
+    base = pd.read_csv(arquivo, index_col="mes")
+    base.index = pd.PeriodIndex(base.index, freq="M")
+
+    pd.set_option("display.width", 200)
+    saida = config.DADOS_PROCESSADOS
+    out = regressao.estimar(base, ate=ate)
+    d = out["dados"]
+
+    titulo("7. Regressão: o resultado do hedge depende da incerteza?")
+    print("Modelo: H_t = ln(S_t+3 / F_t) = b0 + b1·U_t + b2·ln(F_t / S_t) + e_t   (importador)")
+    print(f"Amostra: {d.index.min()} a {d.index.max()}, {len(d)} cohorts"
+          + (f" (hedges contratados até {ate})" if ate else ""))
+
+    print("\n7.1 Estacionariedade (ADF; H0: raiz unitária)")
+    adf = out["adf"]
+    cols = ["amostra", "descricao", "adf_estatistica", "adf_p", "adf_lags",
+            "adf_p_com_tendencia", "kpss_p", "decisao"]
+    print(adf[cols].to_string(float_format=lambda x: f"{x:,.3f}"))
+    if adf[adf["amostra"] == "principal"].loc["H", "decisao"] == "raiz unitária":
+        print("ATENÇÃO: o próprio H (erro de previsão do hedge) saiu com raiz unitária. "
+              "O código não diferencia o H; confira o ADF com tendência e o KPSS.")
+    if out["diferenciar"]:
+        print(f"-> Raiz unitária em {', '.join(out['diferenciar'])}: entram em primeira "
+              f"diferença no modelo principal.")
+    else:
+        print("-> Todas estacionárias em nível: o modelo é estimado em níveis.")
+    adf.to_csv(saida / "regressao_adf.csv")
+
+    print("\n7.2 Câmbio e incerteza no mesmo mês: dlnS_t = a0 + a1·dU_t + u_t")
+    c = regressao.regressao_cambio_incerteza(base, ate=ate)
+    print(f"a1 = {c['alfa1']:.5f} (EP {c['alfa1_ep']:.5f}, p = {c['alfa1_p']:.3f}, n = {c['n']})")
+    pd.Series(c).to_csv(saida / "regressao_cambio_incerteza.csv", header=["valor"])
+
+    print("\n7.3 Exogeneidade fraca (Wald com Newey-West):")
+    exo = regressao.teste_exogeneidade_fraca(d)
+    print(exo.to_string(float_format=lambda x: f"{x:,.3f}"))
+    print("   Esperado: defasagens sem efeito (p alto); adiantamentos podem ter efeito.")
+    exo.to_csv(saida / "regressao_exogeneidade.csv")
+
+    print("\n7.4 Resíduos do modelo principal (MQO): FAC, FACP e Ljung-Box")
+    fac, lb = regressao.diagnostico_residuos(out["principal"])
+    print(fac.to_string(float_format=lambda x: f"{x:,.3f}"))
+    print(lb.to_string(float_format=lambda x: f"{x:,.4f}"))
+    fac.to_csv(saida / "regressao_residuos_fac.csv")
+    caminho = regressao.grafico_fac_facp(fac, n=int(out["principal"].nobs))
+    print(f"Figura: {caminho}")
+
+    print("\n7.5 Sensibilidade do erro-padrão de b1 ao tamanho do Newey-West:")
+    sens = regressao.sensibilidade_lags(d)
+    print(sens.to_string(float_format=lambda x: f"{x:,.5f}"))
+    sens.to_csv(saida / "regressao_lags_hac.csv")
+
+    print(f"\n7.6 Especificações (p com Newey-West L = {config.LAGS_NEWEY_WEST}):")
+    tab = out["especificacoes"]
+    cols = ["transformacao", "n", "beta1", "beta1_ep", "beta1_p", "beta1_p_mqo",
+            "beta2", "beta2_p", "b_fama", "r2"]
+    print(tab[cols].to_string(float_format=lambda x: f"{x:,.4f}"))
+    tab.to_csv(saida / "regressao_especificacoes.csv")
+
+    print("\nLeitura do modelo principal:")
+    print(regressao.texto_conclusao(tab, out["diferenciar"]))
+
+
+if __name__ == "__main__":
+    main()
