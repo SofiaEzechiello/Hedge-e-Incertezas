@@ -2,8 +2,7 @@
 
 Trabalho de Derivativos e Riscos (UFRGS)
 
-Bernardo Chevarria e Sofia Ezechiello.
-Divisão do trabalho: dados do dólar futuro e verificação da medida do resultado do hedge, Bernardo; código, análise e regressão, Sofia.
+Bernardo Fernandes Chevarria e Sofia Marques Ezechiello
 
 **A pergunta.** Uma empresa **importadora** compra mercadoria em dólar todo mês e paga 3
 meses depois. Para não correr o risco de o dólar subir, ela trava o câmbio comprando dólar
