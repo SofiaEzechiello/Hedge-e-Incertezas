@@ -205,53 +205,6 @@ def serie_futuro(dol, horizonte=config.HORIZONTE_HEDGE):
     )
 
 
-
-# ---------------------------------------------------------------------------
-# Planilha do Bernardo (2006 em diante) e PTAX do dia da liquidação
-# ---------------------------------------------------------------------------
-def ler_futuros_planilha(arquivo=config.ARQUIVO_FUTUROS_PLANILHA):
-    """
-    Lê a planilha do Bernardo: em cada fim de mês t, o preço de ajuste do DOL
-    que vence em t + 4 e liquida pela PTAX de fim de t + 3 (coluna data_liquidacao).
-    Devolve no mesmo formato de serie_futuro(), com o preço em R$ por US$.
-    """
-    df = pd.read_excel(arquivo)
-    data_ref = pd.to_datetime(df["data_referencia"])
-    return (
-        pd.DataFrame({
-            "mes": data_ref.dt.to_period("M"),
-            "data": data_ref.dt.strftime("%Y-%m-%d"),
-            "contrato": df["contrato"],
-            "futuro": df["preco_ajuste"] / config.COTACAO_POR,
-            "data_liquidacao": pd.to_datetime(df["data_liquidacao"]),
-            "contratos_abertos": df["contratos_em_aberto"],
-        })
-        .set_index("mes")
-        .sort_index()
-    )
-
-
-def baixar_ptax_diaria(inicio="2006-01-01", forcar=False):
-    """PTAX venda diária (SGS 1), como Series indexada pela data."""
-    arquivo = config.DADOS_BRUTOS / "ptax_diaria.csv"
-    if arquivo.exists() and not forcar:
-        df = pd.read_csv(arquivo)
-    else:
-        print("Baixando PTAX diária...")
-        df = pd.concat(
-            [pd.DataFrame(_sgs(config.SGS_PTAX_DIARIA, ini, fim))
-             for ini, fim in _blocos_de_anos(inicio)],
-            ignore_index=True,
-        ).drop_duplicates("data")
-        arquivo.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(arquivo, index=False)
-
-    datas = pd.to_datetime(df["data"], format="%d/%m/%Y")
-    return pd.Series(df["valor"].astype(float).to_numpy(), index=datas, name="ptax").sort_index()
-
-
-
-
 # ---------------------------------------------------------------------------
 # Planilha do Bernardo (2006 em diante) e PTAX do dia da liquidação
 # ---------------------------------------------------------------------------

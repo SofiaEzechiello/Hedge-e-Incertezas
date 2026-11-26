@@ -16,7 +16,7 @@ A ideia não é medir a eficiência do hedge pela redução de volatilidade, e s
 **Hipótese testada.** H0: β1 = 0 (a incerteza no mês da contratação não prevê o resultado
 do hedge) contra H1: β1 ≠ 0, controlando pelo diferencial futuro/spot (forward premium).
 
-Relatório completo, com os gráficos: <<LINK DO PDF>>
+Relatório completo, com os gráficos: [relatorio/relatorio_hedge.pdf](relatorio/relatorio_hedge.pdf)
 
 ## Resultados principais
 
@@ -48,7 +48,24 @@ Relatório completo, com os gráficos: <<LINK DO PDF>>
 Modelo: H_t = ln(S_t+3 / F_t) = β0 + β1·U_t + β2·ln(F_t / S_t) + ε_t (importador), com
 erro-padrão de Newey-West (L = 3), porque os hedges de meses vizinhos se sobrepõem.
 
-<<COLE AQUI A TABELA DO PASSO 7.6 E A "LEITURA DO MODELO PRINCIPAL" IMPRESSAS PELO main.py>>
+Modelo principal: β1 = −0,0122 p.p. por ponto de EPU (erro-padrão de Newey-West 0,0046; p = 0,008; n = 240).
+Um desvio-padrão a mais de incerteza (cerca de 114 pontos de EPU) está associado a uma queda de cerca de
+1,39 p.p. no resultado do hedge da importadora. O poder explicativo é baixo (R² ≈ 3,7%). O coeficiente de
+Fama implícito é b = 0,33 (IC 95%: −1,23 a 1,89), largo demais para concluir algo sobre o forward premium puzzle.
+
+| Especificação | n | Unidade do efeito | Efeito (p.p.) | Erro-padrão | p-valor |
+|---|---|---|---|---|---|
+| Principal (amostra completa) | 240 | +1 d.p. de EPU | −1,39 | 0,52 | 0,008 |
+| EPU padronizada | 240 | +1 d.p. de EPU | −1,39 | 0,52 | 0,008 |
+| Sem 2020 | 228 | +1 d.p. de EPU | −1,46 | 0,55 | 0,008 |
+| Até dez/2024 | 222 | +1 d.p. de EPU | −1,20 | 0,62 | 0,053 |
+| Operações sem sobreposição | 80 | +1 d.p. de EPU | −1,78 | 0,72 | 0,014 |
+| Dummy: 25% de meses mais incertos | 240 | alta − normal | −2,77 | 1,12 | 0,013 |
+| Dummy: 20% de meses mais incertos | 240 | alta − normal | −2,88 | 1,22 | 0,018 |
+| Dummy: 10% de meses mais incertos | 240 | alta − normal | −4,46 | 1,26 | < 0,001 |
+
+Associação condicional, não efeito causal. Os meses de incerteza alta se concentram em poucos episódios
+(2015–17 e 2025), então o número efetivo de observações independentes é pequeno.
 
 Testes de diagnóstico (ADF, exogeneidade fraca, FAC/FACP dos resíduos, sensibilidade ao
 tamanho do Newey-West) estão em `data/processed/regressao_*.csv`.
