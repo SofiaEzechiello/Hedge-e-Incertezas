@@ -22,7 +22,7 @@ from incerteza import base_hedge, regressao  # noqa: E402
 
 
 def gerar(n=400, gamma=0.0, b=0.4, a=0.0, kappa=3.0, rho_u=0.85, sigma=0.03,
-          raiz_unitaria_u=False, semente=0, so_arrays=False):
+          raiz_unitaria_u=False, rho_fd=0.8, semente=0, so_arrays=False):
     """
     Devolve a base (como a de montar_base) ou, com so_arrays, (H, U, fd).
 
@@ -40,7 +40,7 @@ def gerar(n=400, gamma=0.0, b=0.4, a=0.0, kappa=3.0, rho_u=0.85, sigma=0.03,
     U = 100 + u
     fd = np.zeros(T)
     for t in range(1, T):
-        fd[t] = 0.8 * fd[t - 1] + rng.normal(0, 0.01)   # forward discount persistente
+        fd[t] = rho_fd * fd[t - 1] + rng.normal(0, 0.01)   # forward discount persistente
 
     mu = a + b * fd[:n] + gamma * (U[:n] - U[:n].mean())
     c = np.zeros(T)
@@ -184,3 +184,16 @@ def test_texto_conclusao_roda():
     tab = regressao.estimar(gerar(n=300, gamma=0.003, semente=11))["especificacoes"]
     texto = regressao.texto_conclusao(tab)
     assert "β1" in texto and "b implícito" in texto
+
+
+def test_fd_persistente_nunca_e_diferenciado_e_o_texto_nao_inventa_puzzle():
+    out = regressao.estimar(gerar(n=400, rho_fd=1.0, gamma=0.001, semente=13))
+    assert "fd" not in out["diferenciar"]
+    adf = out["adf"][out["adf"]["amostra"] == "principal"]
+    assert adf.loc["fd", "decisao"] in ("persistente (mantida em nível)", "estacionária")
+    tab = out["especificacoes"]
+    assert (tab["transformacao"] == "níveis").all() or "fd" not in "".join(tab["transformacao"])
+    texto = regressao.texto_conclusao(tab, out["diferenciar"])
+    linha = tab.loc[[i for i in tab.index if "PRINCIPAL" in i][0]]
+    if linha["beta2_p"] >= 0.05:
+        assert "não rejeita b = 1" in texto and "puzzle" not in texto

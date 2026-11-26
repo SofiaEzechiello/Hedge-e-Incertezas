@@ -17,7 +17,7 @@ previsor não viesado do spot" (b = 1), β2 = 0.
 Cuidados de estimação (um por função):
 
     1. Estacionariedade (ADF com BIC, KPSS de conferência)  -> testes_estacionariedade
-       Variável com raiz unitária entra diferenciada.
+       A incerteza com raiz unitária entra diferenciada. O fd fica sempre em nível.
     2. Exogeneidade fraca: E[ε_t | U_t, U_t-1, ...] = 0, mas NÃO a estrita
        (choques cambiais futuros mexem na incerteza futura).
                                                          -> regressao_cambio_incerteza
@@ -120,7 +120,8 @@ def testes_estacionariedade(d, variaveis=("H", "U", "fd"), nivel=0.05):
             "variavel": v, "descricao": NOMES.get(v, v), "n": int(n),
             "adf_estatistica": est, "adf_p": p, "adf_lags": int(lags),
             "adf_p_com_tendencia": p_ct, "kpss_p": p_kpss,
-            "decisao": "raiz unitária" if p >= nivel else "estacionária",
+            "decisao": ("estacionária" if p < nivel else
+                        "persistente (mantida em nível)" if v == "fd" else "raiz unitária"),
         })
     return pd.DataFrame(linhas).set_index("variavel")
 
@@ -175,7 +176,11 @@ def _amostra_principal(base, ate, nivel):
     """Prepara a amostra, roda o ADF e diferencia o que tiver raiz unitária."""
     d0 = preparar(base, ate)
     adf = testes_estacionariedade(d0, nivel=nivel)
-    diferenciar = [v for v in ("U", "fd") if adf.loc[v, "decisao"] == "raiz unitária"]
+    # O fd NUNCA é diferenciado automaticamente: H = (s_t+3 - s_t) - fd_t, com H e a variação
+    # de 3 meses do câmbio estacionárias, logo fd = (s_t+3 - s_t) - H também é. O ADF falha
+    # no fd por baixo poder (ele é muito persistente: é o diferencial de juros) e, diferenciado,
+    # o coeficiente deixa de ser o b - 1 de Fama.
+    diferenciar = [v for v in ("U",) if adf.loc[v, "decisao"] == "raiz unitária"]
     d = preparar(base, ate, diferenciar) if diferenciar else d0
     return d, diferenciar, adf
 
@@ -332,7 +337,8 @@ def sensibilidade_lags(d, lags=LAGS_SENSIBILIDADE):
 def texto_conclusao(tabela, diferenciar=()):
     """Frases em português sobre o modelo principal (sem interpretar causalidade)."""
     p = tabela.loc[[i for i in tabela.index if "PRINCIPAL" in i][0]]
-    unidade = "ponto de incerteza" if not diferenciar else "ponto de variação mensal da incerteza"
+    unidade = ("ponto de variação mensal da incerteza" if "U" in diferenciar
+               else "ponto de incerteza")
     efeito = 100 * p["beta1"] * p["dp_incerteza"]
     rejeita = p["beta1_p"] < 0.05
     frases = [
@@ -345,9 +351,14 @@ def texto_conclusao(tabela, diferenciar=()):
          if rejeita else
          "Não rejeita H0: β1 = 0 a 5%: sem evidência de que a incerteza preveja o resultado do hedge."),
         f"Controle de Fama: β2 = {p['beta2']:+.3f} (p = {p['beta2_p']:.3f}); "
-        f"b implícito = {p['b_fama']:.3f} "
-        f"({'b < 1: compatível com o forward premium puzzle' if p['b_fama'] < 1 else 'b >= 1'}), "
-        f"p-valor de H0: b = 1 igual ao de β2.",
+        f"b implícito = {p['b_fama']:.3f} (IC 95%: [{p['b_fama'] - 1.96 * p['beta2_ep']:.2f}; "
+        f"{p['b_fama'] + 1.96 * p['beta2_ep']:.2f}]): " + (
+            "rejeita b = 1 com b < 1, compatível com o forward premium puzzle."
+            if p["beta2_p"] < 0.05 and p["b_fama"] < 1 else
+            "rejeita b = 1 com b > 1."
+            if p["beta2_p"] < 0.05 else
+            "não rejeita b = 1, mas o intervalo é largo: isso é falta de informação, "
+            "não evidência de que o futuro seja um previsor não viesado."),
     ]
     return "\n".join(frases)
 
