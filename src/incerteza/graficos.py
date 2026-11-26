@@ -145,7 +145,7 @@ def grafico_dispersao(base, reg, lado, nome="6_incerteza_vs_resultado.png"):
     ax.scatter(dados["incerteza"], 100 * dados["resultado"], c=cores, s=40,
                edgecolor="white", linewidth=1, zorder=3)
     xs = np.linspace(dados["incerteza"].min(), dados["incerteza"].max(), 50)
-    ys = 100 * (p["alfa"] + p["beta"] * (xs - config.MEDIA_BASE))
+    ys = 100 * (p["alfa"] + p["beta"] * (xs - reg.attrs.get("media_incerteza", config.MEDIA_BASE)))
     ax.plot(xs, ys, color=config.COR_TEXTO, linewidth=2)
     ax.axhline(0, color="#8c8c8c", linewidth=0.8)
     ax.axvline(config.LIMIAR_INCERTEZA, color=COR_ALTA, linewidth=1, linestyle="--")
@@ -334,3 +334,26 @@ def graficos_descritivos(base, cen, crises, anos):
     grafico_alta_vs_normal(cen)
     grafico_crises(crises)
     grafico_por_ano(anos)
+
+
+def grafico_fac_facp(tabela, n, nome="7_fac_facp_residuos.png"):
+    """FAC e FACP dos resíduos do modelo principal, com a banda de 95% (±1,96/√n)."""
+    banda = 1.96 / n ** 0.5
+    fig, eixos = plt.subplots(1, 2, figsize=(11, 4.5), sharey=True)
+    for ax, col, titulo in ((eixos[0], "fac", "FAC dos resíduos"),
+                            (eixos[1], "facp", "FACP dos resíduos")):
+        fora = tabela[col].abs() > banda
+        cores = [config.COR_SECUNDARIA if f else config.COR_PRINCIPAL for f in fora]
+        ax.bar(tabela.index, tabela[col], color=cores, width=0.6, zorder=3)
+        ax.axhline(0, color="#8c8c8c", linewidth=0.8)
+        for sinal in (1, -1):
+            ax.axhline(sinal * banda, color="#8c8c8c", linewidth=0.8, linestyle="--")
+        ax.set_title(titulo, loc="left", fontsize=12, fontweight="bold", color=config.COR_TEXTO)
+        ax.set_xlabel("Defasagem (meses)", color=config.COR_TEXTO)
+        ax.set_xticks(list(tabela.index))
+        ax.grid(axis="y", color=config.COR_GRADE, linewidth=0.6)
+        ax.set_axisbelow(True)
+        for lado in ("top", "right"):
+            ax.spines[lado].set_visible(False)
+    return _salvar(fig, nome, "Laranja: fora da banda de 95%. Elaboração própria.")
+

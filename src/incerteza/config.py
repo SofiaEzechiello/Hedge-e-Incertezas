@@ -106,8 +106,16 @@ EXPOSICAO_USD = 1_000_000     # US$ por mês (só muda a escala do resultado em 
 # hedge (2018 em diante), como o resumo de Fama pede ("fixado ex ante").
 LIMIAR_INCERTEZA = 110
 
-# Defasagens do erro-padrão de Newey-West (cohorts de 3 meses se sobrepõem)
+# Defasagens do erro-padrão de Newey-West (cohorts de 3 meses se sobrepõem).
+# Cohorts vizinhos compartilham h - 1 = 2 meses, então os resíduos são MA(2); L = h = 3
+# cobre isso com um lag de folga (o mínimo exigido no documento do modelo é L = h).
 LAGS_NEWEY_WEST = 3
+
+# Passo 7 (regressão): robustez
+# A série do EPU dá um salto em 2025; esta amostra para em dez/2024 (mês de contratação).
+ULTIMO_MES_ROBUSTEZ = "2024-12"
+# Tamanhos de Newey-West testados na tabela de sensibilidade
+LAGS_SENSIBILIDADE = (2, 3, 4, 6, 9, 12)
 
 # Robustez: meses excluídos no teste "sem a pandemia"
 PERIODO_PANDEMIA = ("2020-01", "2020-12")

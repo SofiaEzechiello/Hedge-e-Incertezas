@@ -57,9 +57,11 @@ def regressoes(base):
     """Todas as especificações (principal + robustez) numa tabela só."""
     dados = amostra_completa(base)
     dados["incerteza_alta"] = dados["incerteza_alta"].astype(float)
-    # Índice centrado na média histórica (100): o α passa a ser o resultado
-    # esperado do hedge com incerteza "normal", e não com incerteza zero.
-    dados["incerteza_c"] = dados["incerteza"] - config.MEDIA_BASE
+    # Índice centrado na média da PRÓPRIA amostra (o EPU não tem média 100, ao contrário
+    # do IIE-Br): o α passa a ser o resultado esperado do hedge com incerteza média,
+    # e não com incerteza zero.
+    media = dados["incerteza"].mean()
+    dados["incerteza_c"] = dados["incerteza"] - media
 
     inicio, fim = (pd.Period(p, "M") for p in config.PERIODO_PANDEMIA)
     sem_pandemia = dados[(dados.index < inicio) | (dados.index > fim)]
@@ -72,7 +74,9 @@ def regressoes(base):
         regressao(sem_pandemia, nome="Sem 2020"),
         regressao(sem_sobreposicao, lags=0, nome="Sem sobreposição (jan/abr/jul/out)"),
     ]
-    return pd.DataFrame(linhas).set_index("especificacao")
+    tabela = pd.DataFrame(linhas).set_index("especificacao")
+    tabela.attrs["media_incerteza"] = media
+    return tabela
 
 
 def cenarios(base):
@@ -111,7 +115,7 @@ def texto_conclusao(reg, lado=config.LADO_EMPRESA):
     sinal = "mais" if p["beta"] > 0 else "menos"
     signif = "é" if p["beta_p"] < 0.05 else "NÃO é"
     return (
-        f"Para o {lado}, com incerteza normal (índice = {config.MEDIA_BASE}) o hedge rende "
+        f"Para o {lado}, com incerteza média (índice = {reg.attrs.get('media_incerteza', config.MEDIA_BASE):.0f}) o hedge rende "
         f"em média {100 * p['alfa']:+.2f}% por operação de {config.HORIZONTE_HEDGE} meses. "
         f"Cada +{config.DESVIO_BASE} pontos de incerteza (1 desvio) mudam o resultado do hedge em "
         f"{efeito:+.2f} ponto percentual: o hedge rende {sinal} com incerteza alta. "
