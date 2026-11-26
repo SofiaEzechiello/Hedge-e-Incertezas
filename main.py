@@ -12,16 +12,19 @@ Passos:
     4. Base casada: futuro em t  x  PTAX efetiva em t + 3
     5. Resultado do hedge: ln(f_t / s_t+3) e o espelho do importador, em % e em R$
     6. Análise descritiva: incerteza alta x normal, por ano e nas crises
+    7. Regressão: H_t = b0 + b1·U_t + b2·ln(F_t/S_t), com ADF e Newey-West
 
 Uso:
-    python main.py              # roda tudo (usa o cache de data/raw)
-    python main.py --atualizar  # baixa tudo de novo
+    python main.py                  # roda tudo (usa o cache de data/raw)
+    python main.py --atualizar      # baixa tudo de novo
+    python main.py --ate 2024-12    # regressão só com hedges contratados até dez/2024
 
 Saídas:
     data/processed/base_hedge.csv   <- a base do trabalho (um mês por linha)
     data/processed/cenarios.csv     <- com/sem hedge x incerteza alta/normal
     data/processed/por_ano.csv      <- resultado do hedge por ano
     data/processed/por_crise.csv    <- resultado do hedge nas crises e fora delas
+    data/processed/regressao_*.csv  <- tabelas da regressão (passo 7)
     figuras/*.png
 """
 
@@ -29,11 +32,14 @@ import argparse
 import sys
 from pathlib import Path
 
+import pandas as pd
+
 # Permite "import incerteza" sem instalar o pacote
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from incerteza import (  # noqa: E402
     analise, base_hedge, cambio, config, copom, epu, expectativas, graficos, indicador,
+    regressao,
 )
 
 
@@ -202,81 +208,14 @@ def passo6_descritivo(base):
     
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--atualizar", action="store_true", help="ignora o cache e baixa tudo de novo")
-    args = parser.parse_args()
-    config.DADOS_PROCESSADOS.mkdir(parents=True, exist_ok=True)
-
-    incerteza = passo1_incerteza(args.atualizar)
-    dol, futuro = passo2_futuro(args.atualizar)
-    ptax, ptax_liq = passo3_ptax(args.atualizar, dol, futuro)
-    base = passo4_base(incerteza, ptax, futuro, ptax_liq)
-    passo5_resultado(base)
-    passo6_descritivo(base)
-
-    print(f"\nPronto. Base em {config.DADOS_PROCESSADOS / 'base_hedge.csv'}, "
-          f"gráficos em {config.FIGURAS}")
-
-
-if __name__ == "__main__":
-    main()
-
-
-
-"""
-Passo 7: regressão do resultado do hedge na incerteza.
-
-Antes, rode `python main.py` uma vez: ele cria data/processed/base_hedge.csv,
-que este script lê.
-
-Uso:
-    python rodar_regressao.py                  # todos os meses
-    python rodar_regressao.py --ate 2024-12    # só hedges contratados até dez/2024
-
-Saídas:
-    data/processed/regressao_*.csv    <- as tabelas
-    figuras/7_fac_facp_residuos.png   <- FAC e FACP dos resíduos
-"""
-
-import argparse
-import sys
-from pathlib import Path
-
-import pandas as pd
-
-# Permite "import incerteza" sem instalar o pacote
-RAIZ = Path(__file__).resolve().parent
-sys.path.insert(0, str(RAIZ / "src"))
-
-from incerteza import config, regressao  # noqa: E402
-
-
-def titulo(texto):
-    print(f"\n{'=' * 60}\n{texto}\n{'=' * 60}")
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--ate", default=None, metavar="AAAA-MM",
-                        help="só hedges contratados até este mês (ex.: 2024-12)")
-    args = parser.parse_args()
-    ate = args.ate
-
-    arquivo = config.DADOS_PROCESSADOS / "base_hedge.csv"
-    if not arquivo.exists():
-        sys.exit(f"Não achei {arquivo}. Rode `python main.py` antes.")
-    base = pd.read_csv(arquivo, index_col="mes")
-    base.index = pd.PeriodIndex(base.index, freq="M")
-
+# Passo 7: regressão econométrica
+def passo7_regressao(base, ate=None):
+    titulo("7. Regressão: o resultado do hedge depende da incerteza?")
     pd.set_option("display.width", 200)
     saida = config.DADOS_PROCESSADOS
     out = regressao.estimar(base, ate=ate)
     d = out["dados"]
 
-    titulo("7. Regressão: o resultado do hedge depende da incerteza?")
     print("Modelo: H_t = ln(S_t+3 / F_t) = b0 + b1·U_t + b2·ln(F_t / S_t) + e_t   (importador)")
     print(f"Amostra: {d.index.min()} a {d.index.max()}, {len(d)} cohorts"
           + (f" (hedges contratados até {ate})" if ate else ""))
@@ -329,6 +268,27 @@ def main():
 
     print("\nLeitura do modelo principal:")
     print(regressao.texto_conclusao(tab, out["diferenciar"]))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--atualizar", action="store_true", help="ignora o cache e baixa tudo de novo")
+    parser.add_argument("--ate", default=None, metavar="AAAA-MM",
+                        help="regressão só com hedges contratados até este mês (ex.: 2024-12)")
+    args = parser.parse_args()
+    config.DADOS_PROCESSADOS.mkdir(parents=True, exist_ok=True)
+
+    incerteza = passo1_incerteza(args.atualizar)
+    dol, futuro = passo2_futuro(args.atualizar)
+    ptax, ptax_liq = passo3_ptax(args.atualizar, dol, futuro)
+    base = passo4_base(incerteza, ptax, futuro, ptax_liq)
+    passo5_resultado(base)
+    passo6_descritivo(base)
+    passo7_regressao(base, ate=args.ate)
+
+    print(f"\nPronto. Base em {config.DADOS_PROCESSADOS / 'base_hedge.csv'}, "
+          f"gráficos em {config.FIGURAS}")
 
 
 if __name__ == "__main__":
